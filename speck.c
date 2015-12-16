@@ -32,6 +32,7 @@ SOFTWARE.
 #include <sys/types.h>
 #include <stdarg.h>
 #include <time.h>
+#include <assert.h>
 
 /* Constants */
 
@@ -110,30 +111,47 @@ int alloc_sprintf(char **str, const char *format, ...)
     return size;
 }
 
-char *str_match(const char text[], size_t textlen)
-{
-    char str[] = "void spec_";
-    int len = 10;
+/* char *str_match(const char text[], size_t textlen) */
+/* { */
+/*     char str[] = "void spec_"; */
+/*     int len = 10; */
 
-    if (textlen >= len) {
-        for (int i = 0; i < len; i++) {
-            if (str[i] != text[i]) {
-                return NULL;
-            }
-        }
+/*     if (textlen >= len) { */
+/*         for (int i = 0; i < len; i++) { */
+/*             if (str[i] != text[i]) { */
+/*                 return NULL; */
+/*             } */
+/*         } */
 
-        int pre_offset = 5; /* "void " */
-        int post_offset = 7; /* "(void)\n" */
+/*         int pre_offset = 5; /\* "void " *\/ */
+/*         int post_offset = 7; /\* "(void)\n" *\/ */
 
-        char *match = malloc((textlen - pre_offset - post_offset + 1) * sizeof(char));
+/*         char *match = malloc((textlen - pre_offset - post_offset + 1) * sizeof(char)); */
 
-        memcpy(match, text + pre_offset, textlen - pre_offset - post_offset);
-        match[textlen - pre_offset - post_offset] = '\0';
+/*         memcpy(match, text + pre_offset, textlen - pre_offset - post_offset); */
+/*         match[textlen - pre_offset - post_offset] = '\0'; */
 
-        return match;
-    }
+/*         return match; */
+/*     } */
 
-    return NULL;
+/*     return NULL; */
+/* } */
+
+char *str_match(const char text[], size_t textlen) {
+   char *match, *end;
+   char *ptr = text;
+   while (ptr && isspace(*(unsigned char *)ptr)) ptr++;
+   if (strncmp(ptr, "void", 4)) return NULL;
+   ptr += 4;
+   while (ptr && isspace(*(unsigned char *)ptr)) ptr++;
+   if (strncmp(ptr, "spec_", 5)) return NULL;
+   match = ptr;
+   while (ptr && !isspace(*(unsigned char *)ptr) && *ptr != '(') ptr++;
+   end = ptr;
+   ptr = (char *)malloc(end - match + 1);
+   memcpy(ptr, match, end - match);
+   ptr[end - match] = 0;
+   return ptr;
 }
 
 clock_t start_watch()
@@ -151,24 +169,21 @@ void stop_watch(clock_t watch, const char *name)
 void get_tests(struct suite *suite)
 {
     FILE *fp = fopen(suite->c_file, "r");
-    char *line = NULL;
-    size_t linelen = 0;
+    char line[1024];
+    size_t linelen = 1024;
     ssize_t len;
     int test_count = 0;
-    while ((len = getline(&line, &linelen, fp)) > 0) {
+    while (fgets(line, linelen, fp)) {
         char *temp = str_match(line, len);
         if (temp) {
             suite->tests = realloc(suite->tests, (test_count + 1) * sizeof(char *));
             suite->tests[test_count++] = temp;
         }
-        free(line);
-        line = NULL;
     }
 
     suite->tests = realloc(suite->tests, (test_count + 1) * sizeof(char *));
     suite->tests[test_count] = NULL;
 
-    free(line);
     fclose(fp);
 }
 
@@ -190,7 +205,12 @@ void run_tests(struct suite *suite)
         state->function = suite->tests[i];
 
         void (*test)(void) = dlsym(suite->handle, suite->tests[i]);
-        test();
+        if (test) {
+           test();
+        } else {
+           fprintf(stderr, "Can't get function `%s' address at `%s'.\n", suite->tests[i], suite->so_file);
+           assert(0);
+        }
 
         suite->states = realloc(suite->states, (i + 1) * sizeof(struct state *));
         suite->states[i] = malloc(sizeof(struct state));

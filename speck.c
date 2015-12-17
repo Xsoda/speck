@@ -33,6 +33,7 @@ SOFTWARE.
 #include <stdarg.h>
 #include <time.h>
 #include <assert.h>
+#include <ctype.h>
 
 /* Constants */
 
@@ -111,35 +112,10 @@ int alloc_sprintf(char **str, const char *format, ...)
     return size;
 }
 
-/* char *str_match(const char text[], size_t textlen) */
-/* { */
-/*     char str[] = "void spec_"; */
-/*     int len = 10; */
-
-/*     if (textlen >= len) { */
-/*         for (int i = 0; i < len; i++) { */
-/*             if (str[i] != text[i]) { */
-/*                 return NULL; */
-/*             } */
-/*         } */
-
-/*         int pre_offset = 5; /\* "void " *\/ */
-/*         int post_offset = 7; /\* "(void)\n" *\/ */
-
-/*         char *match = malloc((textlen - pre_offset - post_offset + 1) * sizeof(char)); */
-
-/*         memcpy(match, text + pre_offset, textlen - pre_offset - post_offset); */
-/*         match[textlen - pre_offset - post_offset] = '\0'; */
-
-/*         return match; */
-/*     } */
-
-/*     return NULL; */
-/* } */
-
-char *str_match(const char text[], size_t textlen) {
-   char *match, *end;
-   char *ptr = text;
+char *str_match(const char text[]) {
+   char *fname;
+   const char *match, *end;
+   const char *ptr = text;
    while (ptr && isspace(*(unsigned char *)ptr)) ptr++;
    if (strncmp(ptr, "void", 4)) return NULL;
    ptr += 4;
@@ -147,11 +123,12 @@ char *str_match(const char text[], size_t textlen) {
    if (strncmp(ptr, "spec_", 5)) return NULL;
    match = ptr;
    while (ptr && !isspace(*(unsigned char *)ptr) && *ptr != '(') ptr++;
+   while (ptr && isspace(*(unsigned char *)ptr)) ptr++;
    end = ptr;
-   ptr = (char *)malloc(end - match + 1);
-   memcpy(ptr, match, end - match);
-   ptr[end - match] = 0;
-   return ptr;
+   fname = (char *)malloc(end - match + 1);
+   memcpy(fname, match, end - match);
+   fname[end - match] = 0;
+   return fname;
 }
 
 clock_t start_watch()
@@ -170,11 +147,9 @@ void get_tests(struct suite *suite)
 {
     FILE *fp = fopen(suite->c_file, "r");
     char line[1024];
-    size_t linelen = 1024;
-    ssize_t len;
     int test_count = 0;
-    while (fgets(line, linelen, fp)) {
-        char *temp = str_match(line, len);
+    while (fgets(line, sizeof(line), fp)) {
+        char *temp = str_match(line);
         if (temp) {
             suite->tests = realloc(suite->tests, (test_count + 1) * sizeof(char *));
             suite->tests[test_count++] = temp;
